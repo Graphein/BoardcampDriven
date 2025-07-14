@@ -27,3 +27,4 @@ API REST para gestão de uma locadora de jogos de tabuleiro. Desenvolvida como p
 ```bash
 git clone https://github.com/Graphein/BoardcampDriven.git
 cd BoardcampDriven
+npm run dev
