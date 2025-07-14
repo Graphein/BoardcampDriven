@@ -16,7 +16,7 @@ API REST para gestão de uma locadora de jogos de tabuleiro. Desenvolvida como p
 - dotenv
 - dayjs
 - Thunder Client (para testes)
-- Deploy na Render
+- [Deploy na Render](https://boardcampdriven-1.onrender.com/)
 
 ---
 
