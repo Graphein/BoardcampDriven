@@ -1,27 +1,26 @@
+import db from "../database/db.js";
 import dayjs from "dayjs";
-import { db } from "../database/db.js";
-
-import NotFoundError from "../errors/NotFoundError.js";
-import ConflictError from "../errors/ConflictError.js";
 import BadRequestError from "../errors/BadRequestError.js";
+import NotFoundError from "../errors/NotFoundError.js";
+import UnprocessableEntityError from "../errors/UnprocessableEntityError.js";
 
-export async function getAllRentals() {
+export async function getRentals() {
   const result = await db.query(`
     SELECT rentals.*, 
            customers.id AS "customerId", customers.name AS "customerName",
            games.id AS "gameId", games.name AS "gameName"
-      FROM rentals
-      JOIN customers ON rentals."customerId" = customers.id
-      JOIN games ON rentals."gameId" = games.id;
+    FROM rentals
+    JOIN customers ON rentals."customerId" = customers.id
+    JOIN games ON rentals."gameId" = games.id
   `);
 
   return result.rows.map(rental => ({
     id: rental.id,
     customerId: rental.customerId,
     gameId: rental.gameId,
-    rentDate: dayjs(rental.rentDate).format('YYYY-MM-DD'),
+    rentDate: rental.rentDate,
     daysRented: rental.daysRented,
-    returnDate: rental.returnDate ? dayjs(rental.returnDate).format('YYYY-MM-DD') : null,
+    returnDate: rental.returnDate,
     originalPrice: rental.originalPrice,
     delayFee: rental.delayFee,
     customer: {
@@ -36,48 +35,66 @@ export async function getAllRentals() {
 }
 
 export async function createRental({ customerId, gameId, daysRented }) {
-  if (!customerId || !gameId || daysRented <= 0) {
-    throw new BadRequestError("Campos inválidos");
+  const customer = Number(customerId);
+  const game = Number(gameId);
+
+  if (isNaN(customer) || isNaN(game) || daysRented <= 0) {
+    throw new BadRequestError("Dados inválidos");
   }
 
-  const customerResult = await db.query(`SELECT * FROM customers WHERE id = $1`, [customerId]);
-  if (customerResult.rowCount === 0) throw new NotFoundError("Cliente não encontrado");
+  const customerResult = await db.query("SELECT * FROM customers WHERE id = $1", [customer]);
+  if (customerResult.rowCount === 0) {
+    throw new NotFoundError("Cliente não encontrado");
+  }
 
-  const gameResult = await db.query(`SELECT * FROM games WHERE id = $1`, [gameId]);
-  if (gameResult.rowCount === 0) throw new NotFoundError("Jogo não encontrado");
+  const gameResult = await db.query("SELECT * FROM games WHERE id = $1", [game]);
+  if (gameResult.rowCount === 0) {
+    throw new NotFoundError("Jogo não encontrado");
+  }
 
-  const game = gameResult.rows[0];
+  const rentalCount = await db.query(
+    `SELECT COUNT(*) FROM rentals WHERE "gameId" = $1 AND "returnDate" IS NULL`,
+    [game]
+  );
 
-  const rentalsResult = await db.query(`
-    SELECT * FROM rentals WHERE "gameId" = $1 AND "returnDate" IS NULL
-  `, [gameId]);
-
-  if (rentalsResult.rowCount >= game.stockTotal) {
-    throw new ConflictError("Estoque insuficiente");
+  const gamesRented = Number(rentalCount.rows[0].count);
+  const stockTotal = gameResult.rows[0].stockTotal;
+  if (gamesRented >= stockTotal) {
+    throw new UnprocessableEntityError("Estoque esgotado");
   }
 
   const rentDate = dayjs().format("YYYY-MM-DD");
-  const originalPrice = daysRented * game.pricePerDay;
+  const originalPrice = daysRented * gameResult.rows[0].pricePerDay;
 
   await db.query(`
-    INSERT INTO rentals ("customerId", "gameId", "rentDate", "daysRented", "returnDate", "originalPrice", "delayFee")
+    INSERT INTO rentals 
+    ("customerId", "gameId", "rentDate", "daysRented", "returnDate", "originalPrice", "delayFee") 
     VALUES ($1, $2, $3, $4, null, $5, null)
-  `, [customerId, gameId, rentDate, daysRented, originalPrice]);
+  `, [customer, game, rentDate, daysRented, originalPrice]);
 }
 
-export async function returnRental(id) {
-  const result = await db.query(`SELECT * FROM rentals WHERE id = $1`, [id]);
-  if (result.rowCount === 0) throw new NotFoundError("Aluguel não encontrado");
+export async function returnRental(rentalId) {
+  const id = Number(rentalId);
+  if (isNaN(id)) {
+    throw new BadRequestError("ID de aluguel inválido");
+  }
 
-  const rental = result.rows[0];
-  if (rental.returnDate) throw new ConflictError("Aluguel já devolvido");
+  const rentalResult = await db.query("SELECT * FROM rentals WHERE id = $1", [id]);
+  const rental = rentalResult.rows[0];
+
+  if (!rental) {
+    throw new NotFoundError("Aluguel não encontrado");
+  }
+
+  if (rental.returnDate !== null) {
+    throw new UnprocessableEntityError("Aluguel já finalizado");
+  }
 
   const returnDate = dayjs();
   const rentDate = dayjs(rental.rentDate);
-  const diffDays = returnDate.diff(rentDate, "day");
-
-  const delayDays = diffDays - rental.daysRented;
-  const delayFee = delayDays > 0 ? delayDays * rental.originalPrice / rental.daysRented : 0;
+  const daysDiff = returnDate.diff(rentDate, "day");
+  const delay = daysDiff - rental.daysRented;
+  const delayFee = delay > 0 ? delay * rental.originalPrice / rental.daysRented : 0;
 
   await db.query(`
     UPDATE rentals 
@@ -86,12 +103,22 @@ export async function returnRental(id) {
   `, [returnDate.format("YYYY-MM-DD"), delayFee, id]);
 }
 
-export async function deleteRental(id) {
-  const result = await db.query(`SELECT * FROM rentals WHERE id = $1`, [id]);
-  if (result.rowCount === 0) throw new NotFoundError("Aluguel não encontrado");
+export async function deleteRental(rentalId) {
+  const id = Number(rentalId);
+  if (isNaN(id)) {
+    throw new BadRequestError("ID de aluguel inválido");
+  }
 
-  const rental = result.rows[0];
-  if (!rental.returnDate) throw new BadRequestError("Aluguel ainda não devolvido");
+  const rentalResult = await db.query("SELECT * FROM rentals WHERE id = $1", [id]);
+  const rental = rentalResult.rows[0];
 
-  await db.query(`DELETE FROM rentals WHERE id = $1`, [id]);
+  if (!rental) {
+    throw new NotFoundError("Aluguel não encontrado");
+  }
+
+  if (rental.returnDate === null) {
+    throw new BadRequestError("Não é possível excluir aluguel não finalizado");
+  }
+
+  await db.query("DELETE FROM rentals WHERE id = $1", [id]);
 }

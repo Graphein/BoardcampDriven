@@ -1,4 +1,4 @@
-import { db } from "../database/db.js";
+import db  from "../database/db.js";
 
 export function findByName(name) {
   return db.query("SELECT * FROM games WHERE name = $1", [name]);
