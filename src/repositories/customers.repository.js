@@ -1,4 +1,4 @@
-import db  from "../database/db.js";
+import { db } from "../database/db.js";
 
 export function findByCpf(cpf) {
   return db.query(`SELECT * FROM customers WHERE cpf = $1`, [cpf]);
