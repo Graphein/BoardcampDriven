@@ -1,19 +1,11 @@
 import dayjs from "dayjs";
-import { db } from "../database/db.js";
-
+import * as rentalsRepository from "../repositories/rentals.repository.js";
 import NotFoundError from "../errors/NotFoundError.js";
 import ConflictError from "../errors/ConflictError.js";
 import BadRequestError from "../errors/BadRequestError.js";
 
 export async function getAllRentals() {
-  const result = await db.query(`
-    SELECT rentals.*, 
-           customers.id AS "customerId", customers.name AS "customerName",
-           games.id AS "gameId", games.name AS "gameName"
-      FROM rentals
-      JOIN customers ON rentals."customerId" = customers.id
-      JOIN games ON rentals."gameId" = games.id;
-  `);
+  const result = await rentalsRepository.findAllRentals();
 
   return result.rows.map(rental => ({
     id: rental.id,
@@ -40,33 +32,37 @@ export async function createRental({ customerId, gameId, daysRented }) {
     throw new BadRequestError("Campos inválidos");
   }
 
-  const customerResult = await db.query(`SELECT * FROM customers WHERE id = $1`, [customerId]);
+  const customerResult = await rentalsRepository.findCustomerById(customerId);
   if (customerResult.rowCount === 0) throw new NotFoundError("Cliente não encontrado");
 
-  const gameResult = await db.query(`SELECT * FROM games WHERE id = $1`, [gameId]);
+  const gameResult = await rentalsRepository.findGameById(gameId);
   if (gameResult.rowCount === 0) throw new NotFoundError("Jogo não encontrado");
 
   const game = gameResult.rows[0];
 
-  const rentalsResult = await db.query(`
-    SELECT * FROM rentals WHERE "gameId" = $1 AND "returnDate" IS NULL
-  `, [gameId]);
+  const openRentals = await rentalsRepository.countOpenRentalsByGameId(gameId);
+  const openCount = Number(openRentals.rows[0].count);
 
-  if (rentalsResult.rowCount >= game.stockTotal) {
+  if (openCount >= game.stockTotal) {
     throw new ConflictError("Estoque insuficiente");
   }
 
   const rentDate = dayjs().format("YYYY-MM-DD");
   const originalPrice = daysRented * game.pricePerDay;
 
-  await db.query(`
-    INSERT INTO rentals ("customerId", "gameId", "rentDate", "daysRented", "returnDate", "originalPrice", "delayFee")
-    VALUES ($1, $2, $3, $4, null, $5, null)
-  `, [customerId, gameId, rentDate, daysRented, originalPrice]);
+  await rentalsRepository.insertRental({
+    customerId,
+    gameId,
+    rentDate,
+    daysRented,
+    returnDate: null,
+    originalPrice,
+    delayFee: null,
+  });
 }
 
 export async function returnRental(id) {
-  const result = await db.query(`SELECT * FROM rentals WHERE id = $1`, [id]);
+  const result = await rentalsRepository.findRentalById(id);
   if (result.rowCount === 0) throw new NotFoundError("Aluguel não encontrado");
 
   const rental = result.rows[0];
@@ -79,19 +75,15 @@ export async function returnRental(id) {
   const delayDays = diffDays - rental.daysRented;
   const delayFee = delayDays > 0 ? delayDays * rental.originalPrice / rental.daysRented : 0;
 
-  await db.query(`
-    UPDATE rentals 
-    SET "returnDate" = $1, "delayFee" = $2 
-    WHERE id = $3
-  `, [returnDate.format("YYYY-MM-DD"), delayFee, id]);
+  await rentalsRepository.updateRentalReturn(id, returnDate.format("YYYY-MM-DD"), delayFee);
 }
 
 export async function deleteRental(id) {
-  const result = await db.query(`SELECT * FROM rentals WHERE id = $1`, [id]);
+  const result = await rentalsRepository.findRentalById(id);
   if (result.rowCount === 0) throw new NotFoundError("Aluguel não encontrado");
 
   const rental = result.rows[0];
   if (!rental.returnDate) throw new BadRequestError("Aluguel ainda não devolvido");
 
-  await db.query(`DELETE FROM rentals WHERE id = $1`, [id]);
+  await rentalsRepository.deleteRental(id);
 }

@@ -1,7 +1,7 @@
-import { connection } from "../database/db.js";
+import { db } from "../database/db.js";
 
 export async function findAllRentals() {
-  return connection.query(`
+  return db.query(`
     SELECT
       rentals.*,
       customers.name AS "customerName",
@@ -21,7 +21,7 @@ export async function insertRental({
   originalPrice,
   delayFee,
 }) {
-  return connection.query(
+  return db.query(
     `
     INSERT INTO rentals
       ("customerId", "gameId", "rentDate", "daysRented", "returnDate", "originalPrice", "delayFee")
@@ -41,7 +41,7 @@ export async function insertRental({
 }
 
 export async function countOpenRentalsByGameId(gameId) {
-  return connection.query(
+  return db.query(
     `
     SELECT COUNT(*) FROM rentals
     WHERE "gameId" = $1 AND "returnDate" IS NULL
@@ -51,7 +51,7 @@ export async function countOpenRentalsByGameId(gameId) {
 }
 
 export async function findRentalById(rentalId) {
-  return connection.query(
+  return db.query(
     `
     SELECT * FROM rentals WHERE id = $1
   `,
@@ -60,7 +60,7 @@ export async function findRentalById(rentalId) {
 }
 
 export async function updateRentalReturn(rentalId, returnDate, delayFee) {
-  return connection.query(
+  return db.query(
     `
     UPDATE rentals
     SET "returnDate" = $1, "delayFee" = $2
@@ -71,10 +71,17 @@ export async function updateRentalReturn(rentalId, returnDate, delayFee) {
 }
 
 export async function deleteRental(rentalId) {
-  return connection.query(
+  return db.query(
     `
     DELETE FROM rentals WHERE id = $1
   `,
     [rentalId]
   );
+}
+export async function findCustomerById(customerId) {
+  return db.query(`SELECT * FROM customers WHERE id = $1`, [customerId]);
+}
+
+export async function findGameById(gameId) {
+  return db.query(`SELECT * FROM games WHERE id = $1`, [gameId]);
 }
