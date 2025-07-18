@@ -3,6 +3,7 @@ import * as rentalsRepository from "../repositories/rentals.repository.js";
 import NotFoundError from "../errors/NotFoundError.js";
 import ConflictError from "../errors/ConflictError.js";
 import BadRequestError from "../errors/BadRequestError.js";
+import UnprocessableEntityError from "../errors/UnprocessableEntityError.js";
 
 export async function getAllRentals() {
   const result = await rentalsRepository.findAllRentals();
@@ -66,7 +67,7 @@ export async function returnRental(id) {
   if (result.rowCount === 0) throw new NotFoundError("Aluguel não encontrado");
 
   const rental = result.rows[0];
-  if (rental.returnDate) throw new ConflictError("Aluguel já devolvido");
+  if (rental.returnDate) throw new UnprocessableEntityError("Aluguel já devolvido");
 
   const returnDate = dayjs();
   const rentDate = dayjs(rental.rentDate);

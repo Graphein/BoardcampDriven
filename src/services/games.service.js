@@ -3,7 +3,7 @@ import ConflictError from "../errors/ConflictError.js";
 
 export async function createGame(game) {
   const existing = await gamesRepository.findByName(game.name);
-  if (existing.rowCount > 0) throw new ConflictError("Game already exists");
+  if (existing.rowCount > 0) throw new ConflictError("Jogo existe");
   await gamesRepository.insert(game);
 }
 

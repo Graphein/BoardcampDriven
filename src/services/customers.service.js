@@ -5,7 +5,7 @@ import NotFoundError from "../errors/NotFoundError.js";
 export async function createCustomer(data) {
   const { cpf } = data;
   const existing = await customersRepository.findByCpf(cpf);
-  if (existing.rowCount > 0) throw new ConflictError("CPF already registered");
+  if (existing.rowCount > 0) throw new ConflictError("CPF já Existe");
 
   await customersRepository.insert(data);
 }
