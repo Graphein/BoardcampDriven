@@ -80,6 +80,11 @@ export async function returnRental(id) {
 }
 
 export async function deleteRental(id) {
+
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new BadRequestError("ID inválido");
+  }
+
   const result = await rentalsRepository.findRentalById(id);
   if (result.rowCount === 0) throw new NotFoundError("Aluguel não encontrado");
 
