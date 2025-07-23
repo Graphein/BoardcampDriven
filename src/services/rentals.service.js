@@ -63,6 +63,7 @@ export async function createRental({ customerId, gameId, daysRented }) {
 }
 
 export async function returnRental(id) {
+  if (!Number.isInteger(id) || id <= 0) { throw new BadRequestError("ID inválido");}
   const result = await rentalsRepository.findRentalById(id);
   if (result.rowCount === 0) throw new NotFoundError("Aluguel não encontrado");
 

@@ -1,6 +1,7 @@
 import * as customersRepository from "../repositories/customers.repository.js";
 import ConflictError from "../errors/ConflictError.js";
 import NotFoundError from "../errors/NotFoundError.js";
+import BadRequestError from "../errors/BadRequestError.js";
 
 export async function createCustomer(data) {
   const { cpf } = data;
@@ -16,6 +17,8 @@ export async function getAllCustomers() {
 }
 
 export async function getCustomerById(id) {
+  
+  if (!Number.isInteger(id) || id <= 0) { throw new BadRequestError("ID inválido");}
   const { rows } = await customersRepository.findById(id);
   if (rows.length === 0) throw new NotFoundError("Cliente não encontrado");
 
@@ -23,6 +26,8 @@ export async function getCustomerById(id) {
 }
 
 export async function updateCustomer(id, data) {
+  
+  if (!Number.isInteger(id) || id <= 0) { throw new BadRequestError("ID inválido");}
   const customerExists = await customersRepository.findById(id);
   if (customerExists.rowCount === 0) throw new NotFoundError("Cliente não encontrado");
 
